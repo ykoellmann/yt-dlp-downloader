@@ -1,0 +1,27 @@
+:80 {
+    # WebDAV für Infuse
+    route /webdav/* {
+        uri strip_prefix /webdav
+        webdav {
+            root /downloads
+        }
+    }
+
+    # File-Browser (Debugging)
+    route /files/* {
+        uri strip_prefix /files
+        file_server browse {
+            root /downloads
+        }
+    }
+
+    # Backend API
+    route /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Frontend
+    route /* {
+        reverse_proxy frontend:3000
+    }
+}

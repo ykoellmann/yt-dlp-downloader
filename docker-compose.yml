@@ -1,0 +1,28 @@
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./downloads:/downloads
+      - ./data:/data
+      - ./rclone/backup.sh:/rclone/backup.sh
+      - /home/koellman/.config/rclone:/root/.config/rclone:ro
+    environment:
+      - DATABASE_URL=sqlite:////data/ytdl.db
+      - DOWNLOADS_PATH=/downloads
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+
+  caddy:
+    build: ./caddy
+    ports:
+      - "8090:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./downloads:/downloads
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped

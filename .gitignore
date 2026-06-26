@@ -1,0 +1,10 @@
+data/
+downloads/
+frontend/node_modules/
+frontend/dist/
+frontend/.oxlintrc.json
+frontend/README.md
+__pycache__/
+*.pyc
+.env
+rclone.log
