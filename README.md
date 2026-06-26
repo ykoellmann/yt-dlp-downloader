@@ -2,8 +2,6 @@
 
 Self-hosted download service for Raspberry Pi. Send URLs from any yt-dlp-compatible site via iOS Shortcut or Web UI — files land on the Pi and are accessible via WebDAV (e.g. Infuse). Nightly rclone backup to iCloud.
 
-Access is exclusively via Cloudflare Tunnel (`ytdl.koellmann.dev`), protected by Cloudflare Access. No open ports.
-
 ## Stack
 
 | Component | Technology |
@@ -54,7 +52,7 @@ bash setup.sh
 Add to `/etc/cloudflared/config.yml`:
 
 ```yaml
-- hostname: ytdl.koellmann.dev
+- hostname: xxx
   service: http://localhost:8090
 ```
 
@@ -66,7 +64,7 @@ sudo systemctl restart cloudflared
 
 ### 3. Cloudflare Access
 
-In the Cloudflare dashboard, create an Access Policy for `ytdl.koellmann.dev` that allows only your email address. No login system needed in the app.
+In the Cloudflare dashboard, create an Access Policy for `xxx` that allows only your email address. No login system needed in the app.
 
 ### 4. Infuse (WebDAV)
 
@@ -80,7 +78,7 @@ Create a shortcut with these actions:
 
 1. **Trigger**: Share Sheet, accepts URLs
 2. **Action**: Get Contents of URL
-   - URL: `https://ytdl.koellmann.dev/api/jobs`
+   - URL: `xxx/api/jobs`
    - Method: `POST`
    - Headers: `Content-Type: application/json`
    - Body: `{"url": "<Shared URL>"}`
