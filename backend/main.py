@@ -127,7 +127,7 @@ def _build_command(url: str, quality: str = "best", format_id: Optional[str] = N
     if format_flag:
         parts.append(format_flag)
     parts += [
-        '-o "/downloads/%(uploader)s/%(title)s.%(ext)s"',
+        '-o "/downloads/%(title)s.%(ext)s"',
         "--trim-filenames 200",
         "--print after_move:filepath",
         url,
