@@ -2,7 +2,7 @@ name: Build and Push Images
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
         include:
@@ -24,9 +24,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU (fuer arm64-Cross-Build auf x86-Runnern)
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
