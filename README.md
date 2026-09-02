@@ -1,6 +1,6 @@
-# ytdl-service
+# yt-dlp-downloader
 
-Self-hosted download service for Raspberry Pi. Send URLs from any yt-dlp-compatible site via iOS Shortcut or Web UI — files land on the Pi and are accessible via WebDAV (e.g. Infuse). Nightly rclone backup to iCloud.
+Self-hosted download service for any Docker host (built and tested on a Raspberry Pi 5). Send URLs from any yt-dlp-compatible site via iOS Shortcut or Web UI — files land on your server and are accessible via WebDAV (e.g. Infuse). Optional nightly rclone backup to a cloud remote.
 
 ## Stack
 
@@ -12,12 +12,12 @@ Self-hosted download service for Raspberry Pi. Send URLs from any yt-dlp-compati
 | Thumbnails | ffmpeg + ffprobe |
 | Frontend | React + TypeScript + Vite + Tailwind CSS v4 |
 | File server | Caddy with WebDAV plugin (via xcaddy) |
-| Auth | Cloudflare Access |
-| Backup | rclone cronjob (03:00 daily) |
+| Auth | Reverse proxy of your choice (tested with Cloudflare Access) |
+| Backup | Optional rclone cronjob |
 
 ## Features
 
-- Queue-based downloads (one at a time, conserves Pi resources)
+- Queue-based downloads (one at a time, conserves low-power hosts like a Pi)
 - Real-time progress bar with speed + ETA
 - Quality presets (Best / 4K / 1080p / 720p / 480p / 360p / Audio only)
 - Manual format selection — fetches available formats per URL before downloading
@@ -25,66 +25,72 @@ Self-hosted download service for Raspberry Pi. Send URLs from any yt-dlp-compati
 - Cancel active downloads, retry failed/cancelled jobs (resumes with `-c`)
 - Disk usage stats, total downloaded size
 - Thumbnail generation for done jobs
-- WebDAV server for Infuse integration
+- WebDAV server for e.g. Infuse integration
 - File browser at `/files/`
 
 ## Prerequisites
 
-- Raspberry Pi 5 (or any Linux box)
-- Docker + Docker Compose
-- Cloudflare account with a tunnel configured
-- rclone configured on the host with an `icloud` remote (for backup)
+- Any Linux host with Docker + Docker Compose (built and tested on a Raspberry Pi 5 / arm64)
+- Optional: a reverse proxy / tunnel (e.g. Cloudflare Tunnel) if you want to expose the service outside your LAN
+- Optional: rclone configured on the host with a remote of your choice, if you want automated backups
 
 ## Deployment
 
-### 1. Clone & deploy
+Pre-built images are published to `ghcr.io/ykoellmann/ytdl-*` via GitHub Actions (see `.github/workflows/build.yml`) for `linux/arm64`. No local build required.
 
 ```bash
-git clone https://github.com/youruser/ytdl-service.git ~/docker/yt-dlp
-cd ~/docker/yt-dlp
-bash setup.sh
+git clone https://github.com/ykoellmann/yt-dlp-downloader.git
+cd yt-dlp-downloader
+mkdir -p data downloads
+cp .env.example .env   # edit RCLONE_CONFIG_DIR if you use the backup cronjob
+docker compose pull
+docker compose up -d
 ```
 
-`setup.sh` creates the `data/` and `downloads/` directories and runs `docker compose up -d --build`.
+The web UI is then reachable at `http://<host-ip>:8090`.
 
-### 2. Cloudflare Tunnel
+### Reverse proxy / public access (optional)
 
-Add to `/etc/cloudflared/config.yml`:
+Point your reverse proxy or tunnel at `http://localhost:8090`. Example for a Cloudflare Tunnel config:
 
 ```yaml
-- hostname: xxx
-  service: http://localhost:8090
+ingress:
+  - hostname: ytdl.your-domain.com
+    service: http://localhost:8090
 ```
 
-Then restart the tunnel:
+Restrict access with your proxy's auth mechanism (e.g. a Cloudflare Access policy allowing only your own email address) — the app itself has no built-in authentication.
 
-```bash
-sudo systemctl restart cloudflared
-```
+### WebDAV (e.g. Infuse)
 
-### 3. Cloudflare Access
-
-In the Cloudflare dashboard, create an Access Policy for `xxx` that allows only your email address. No login system needed in the app.
-
-### 4. Infuse (WebDAV)
-
-Add a server in Infuse:
+Add a server in your WebDAV client:
 - **Type**: WebDAV
-- **URL**: `http://<pi-ip>:8090/webdav/` (LAN, recommended — Infuse doesn't support Cloudflare Access tokens natively)
+- **URL**: `http://<host-ip>:8090/webdav/` (LAN access recommended — many WebDAV clients, e.g. Infuse, don't support proxy auth tokens like Cloudflare Access natively)
 
-### 5. iOS Shortcut
+### iOS Shortcut
 
 Create a shortcut with these actions:
 
 1. **Trigger**: Share Sheet, accepts URLs
 2. **Action**: Get Contents of URL
-   - URL: `xxx/api/jobs`
+   - URL: `https://ytdl.your-domain.com/api/jobs` (or your LAN address)
    - Method: `POST`
    - Headers: `Content-Type: application/json`
    - Body: `{"url": "<Shared URL>"}`
-3. **Feedback**: Show notification "Download gestartet"
+3. **Feedback**: Show notification "Download started"
 
-If Cloudflare Access blocks the shortcut, create a Cloudflare Access Service Token and add it to the shortcut headers (`CF-Access-Client-Id` + `CF-Access-Client-Secret`).
+If your reverse-proxy auth blocks the shortcut's direct API call (common with Cloudflare Access, since there's no browser cookie), create a service token in your proxy and add it to the shortcut headers, e.g. for Cloudflare:
+- `CF-Access-Client-Id: <client_id>`
+- `CF-Access-Client-Secret: <client_secret>`
+
+## Updating
+
+New images are built automatically on every push to `main`. On the host:
+
+```bash
+docker compose pull
+docker compose up -d
+```
 
 ## Local Development
 
@@ -110,15 +116,17 @@ npm run dev   # → http://localhost:5173, proxies /api/* to :8000
 
 ```
 .
+├── .github/workflows/
+│   └── build.yml         # CI: builds + pushes images to ghcr.io on push to main
 ├── backend/
-│   ├── main.py          # FastAPI app, all endpoints
-│   ├── models.py        # SQLModel schema
-│   ├── worker.py        # Async download worker, progress parsing
+│   ├── main.py            # FastAPI app, all endpoints
+│   ├── models.py          # SQLModel schema
+│   ├── worker.py          # Async download worker, progress parsing
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── caddy/
-│   ├── Caddyfile        # Reverse proxy + WebDAV + file browser
-│   └── Dockerfile       # Custom build with caddy-webdav plugin
+│   ├── Caddyfile          # Reverse proxy + WebDAV + file browser
+│   └── Dockerfile         # Custom build with caddy-webdav plugin
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx
@@ -130,9 +138,9 @@ npm run dev   # → http://localhost:5173, proxies /api/* to :8000
 │   │       └── StatusBadge.tsx
 │   └── Dockerfile
 ├── rclone/
-│   └── backup.sh        # Daily iCloud sync
+│   └── backup.sh          # Optional daily backup script (see below)
 ├── docker-compose.yml
-└── setup.sh             # First-time deployment script
+└── .env.example
 ```
 
 ## API
@@ -165,7 +173,8 @@ npm run dev   # → http://localhost:5173, proxies /api/* to :8000
 
 ## Notes
 
-- **Single worker by design** — the Pi has limited resources. Parallelism can be added later.
-- **yt-dlp updates** — the Dockerfile runs `pip install -U yt-dlp` at build time. Rebuild periodically to stay current.
+- **Single worker by design** — assumes a low-power host (e.g. a Pi). Parallelism can be added later.
+- **Images are built for `linux/arm64` only** — adjust `.github/workflows/build.yml`'s `platforms` if you need `linux/amd64` too.
+- **yt-dlp updates** — the backend image is rebuilt with `pip install -U yt-dlp` on every push to `main`; pull the latest image periodically (or set up Renovate/Watchtower) to stay current.
 - **Audio-only downloads** — ffmpeg thumbnail generation fails silently; the frontend shows a placeholder.
-- **rclone** — must be configured on the host with an `icloud` remote before deploying. The config is mounted read-only into the container.
+- **rclone backup is optional** — only relevant if you mount a configured rclone config directory and set `RCLONE_CONFIG_DIR` in `.env`.
